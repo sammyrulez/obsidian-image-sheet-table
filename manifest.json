@@ -2,8 +2,8 @@
   "id": "image-sheet-table",
   "name": "Image → Google Sheet Table",
   "version": "0.1.0",
-  "minAppVersion": "1.5.0",
-  "description": "Legge l'URL del Google Sheet dal title dell'immagine Markdown e inserisce una tabella sotto l'immagine.",
+  "minAppVersion": "1.9.0",
+  "description": "Renders a table from a Google Sheet via a fenced code block.",
   "author": "Sam Reghenzi",
   "isDesktopOnly": false
 }
