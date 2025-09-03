@@ -1,0 +1,16 @@
+{
+  "name": "image-sheet-table",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "esbuild src/main.ts --bundle --outfile=main.js --format=cjs --platform=node --external:obsidian --watch",
+    "build": "esbuild src/main.ts --bundle --outfile=main.js --format=cjs --platform=node --external:obsidian"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.11",
+    "esbuild": "^0.23.0",
+    "obsidian": "^1.8.7",
+    "papaparse": "^5.4.1",
+    "typescript": "^5.5.4"
+  }
+}
