@@ -17,7 +17,6 @@ The plugin supports **public CSV** links out-of-the-box, and **private sheets** 
 
 * 🚀 Render a Sheet range as an HTML table inside Markdown
 * 🔗 “**Open in Google Sheets**” link above each table
-* 📋 “**Copy CSV URL**” quick action (helpful for debugging)
 * 🧭 Flexible URL handling: `export?format=csv`, `gviz/tq?tqx=out:csv`, or standard `/edit#gid=…`
 * 🧩 Optional parameters: `range`, `headers`, `maxRows`, `gid`, `sheetName`
 * 🔐 **Private sheets** support (OAuth Device Flow) with Sheets/Drive API
@@ -121,7 +120,6 @@ maxRows: 50
 Above the rendered table you’ll see:
 
 * **Open in Google Sheets** → opens your sheet in the default browser
-* **Copy CSV URL** → copies the effective CSV URL used to fetch data
 
 ---
 
