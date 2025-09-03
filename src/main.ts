@@ -2,9 +2,6 @@ import { Plugin } from "obsidian";
 // @ts-ignore - bundled by esbuild
 import Papa from "papaparse";
 
-
-
-
 /**
  * Google Sheet → Table (code block version)
  *
@@ -22,40 +19,140 @@ import Papa from "papaparse";
  * ```
  */
 export default class GoogleSheetTablePlugin extends Plugin {
+  /** Build both a CSV export URL and a canonical "edit" URL for the sheet. */
+  private buildUrls(
+    sheetUrl: string,
+    range?: string,
+    sheetName?: string,
+    explicitGid?: string
+  ): { csvUrl: string; editUrl: string } {
+    try {
+      const u = new URL(sheetUrl);
+      const id = u.pathname.match(/\/spreadsheets\/d\/([^/]+)/)?.[1];
+
+      // gid can live in hash or query; allow explicit override
+      const gidFromHash = u.hash.match(/[?&#]gid=(\d+)/)?.[1];
+      const gidFromQuery = u.searchParams.get("gid") ?? undefined;
+      const gid = explicitGid || gidFromHash || gidFromQuery || undefined;
+
+      // --- Build edit URL (open in browser) ---
+      let editUrl = sheetUrl;
+      if (id) {
+        editUrl = `https://docs.google.com/spreadsheets/d/${id}/edit${
+          gid ? `#gid=${gid}` : ""
+        }`;
+      }
+
+      // --- Build CSV URL (used by the table) ---
+      // Case 1: already export CSV
+      if (
+        u.pathname.includes("/export") &&
+        u.searchParams.get("format") === "csv"
+      ) {
+        if (range) u.searchParams.set("range", range);
+        return { csvUrl: u.toString(), editUrl };
+      }
+
+      // Case 2: gviz → out:csv
+      if (u.pathname.includes("/gviz/tq")) {
+        u.searchParams.set("tqx", "out:csv");
+        if (range) u.searchParams.set("range", range);
+        if (sheetName && !u.searchParams.get("sheet"))
+          u.searchParams.set("sheet", sheetName);
+        return { csvUrl: u.toString(), editUrl };
+      }
+
+      // Case 3: generic Sheets link → export CSV (prefer gid when available)
+      if (id && gid) {
+        const base = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
+        return {
+          csvUrl: range ? `${base}&range=${encodeURIComponent(range)}` : base,
+          editUrl,
+        };
+      }
+
+      if (id) {
+        // Fallback: gviz CSV with either named sheet or gid=0
+        const gviz = new URL(
+          `https://docs.google.com/spreadsheets/d/${id}/gviz/tq`
+        );
+        gviz.searchParams.set("tqx", "out:csv");
+        if (range) gviz.searchParams.set("range", range);
+        if (sheetName) gviz.searchParams.set("sheet", sheetName);
+        else gviz.searchParams.set("gid", "0");
+        return { csvUrl: gviz.toString(), editUrl };
+      }
+
+      // Not a recognized Sheets URL → return as-is
+      return { csvUrl: sheetUrl, editUrl };
+    } catch {
+      return { csvUrl: sheetUrl, editUrl: sheetUrl };
+    }
+  }
+
   async onload() {
     this.injectStyles();
 
     // Register a Markdown code block processor for ```gsheet
-    this.registerMarkdownCodeBlockProcessor("gsheet", async (source, el, _ctx) => {
-      const cfg = this.parseConfig(source);
-      if (!cfg.sheet) {
-        el.createEl("div", { text: "Missing `sheet` URL in gsheet block." }).addClass("gst-error");
-        return;
+    this.registerMarkdownCodeBlockProcessor(
+      "gsheet",
+      async (source, el, _ctx) => {
+        const cfg = this.parseConfig(source);
+        if (!cfg.sheet) {
+          el.createEl("div", {
+            text: "Missing `sheet` URL in gsheet block.",
+          }).addClass("gst-error");
+          return;
+        }
+
+        const placeholder = el.createEl("div", {
+          text: "Loading data from Google Sheet…",
+        });
+        placeholder.addClass("gst-loading");
+
+        try {
+          // Before: const csvUrl = this.buildCsvUrl(cfg.sheet, cfg.range);
+          // After:
+          const { csvUrl, editUrl } = this.buildUrls(
+            cfg.sheet,
+            cfg.range,
+            cfg.sheetName,
+            cfg.gid
+          );
+
+          // Actions toolbar (appears above the table)
+          const actions = el.createEl("div", { cls: "gst-actions" });
+          const openLink = actions.createEl("a", {
+            text: "Open in Google Sheets",
+          });
+          openLink.href = editUrl || cfg.sheet;
+          openLink.target = "_blank";
+          openLink.rel = "noopener";
+
+          const csv = await this.fetchText(csvUrl);
+
+          const parsed = Papa.parse<string[]>(csv.trim(), {
+            skipEmptyLines: true,
+          });
+          if (parsed.errors?.length)
+            throw new Error(
+              parsed.errors.map((e: Papa.ParseError) => e.message).join("; ")
+            );
+
+          let rows = parsed.data as unknown as string[][];
+          const headers = Number(cfg.headers ?? 1);
+          const maxRows = cfg.maxRows ? Number(cfg.maxRows) : undefined;
+          if (maxRows && rows.length > maxRows + headers)
+            rows = rows.slice(0, maxRows + headers);
+
+          const table = this.buildTable(rows, headers);
+          placeholder.replaceWith(table);
+        } catch (err: any) {
+          placeholder.setText(`Error loading sheet: ${err?.message || err}`);
+          placeholder.addClass("gst-error");
+        }
       }
-
-      const placeholder = el.createEl("div", { text: "Loading data from Google Sheet…" });
-      placeholder.addClass("gst-loading");
-
-      try {
-        const csvUrl = this.buildCsvUrl(cfg.sheet, cfg.range);
-        console.log("Fetching CSV from:", csvUrl);
-        const csv = await this.fetchText(csvUrl);
-        console.log("Fetched CSV:", csv);
-        const parsed = Papa.parse<string[]>(csv.trim(), { skipEmptyLines: true });
-        if (parsed.errors?.length) throw new Error(parsed.errors.map((e: Papa.ParseError) => e.message).join("; "));
-
-        let rows = parsed.data as unknown as string[][];
-        const headers = Number(cfg.headers ?? 1);
-        const maxRows = cfg.maxRows ? Number(cfg.maxRows) : undefined;
-        if (maxRows && rows.length > maxRows + headers) rows = rows.slice(0, maxRows + headers);
-
-        const table = this.buildTable(rows, headers);
-        placeholder.replaceWith(table);
-      } catch (err: any) {
-        placeholder.setText(`Error loading sheet: ${err?.message || err}`);
-        placeholder.addClass("gst-error");
-      }
-    });
+    );
   }
 
   // -------- Helpers --------
@@ -66,13 +163,20 @@ export default class GoogleSheetTablePlugin extends Plugin {
     const trimmed = source.trim();
 
     // Try simple key=value;key=value first
-    if (/[:=]/.test(trimmed) && trimmed.includes("=") && !trimmed.includes("\n")) {
+    if (
+      /[:=]/.test(trimmed) &&
+      trimmed.includes("=") &&
+      !trimmed.includes("\n")
+    ) {
       for (const part of trimmed.split(/;|\s\|\s/)) {
         const m = part.trim().match(/^([\w-]+)\s*=\s*(.+)$/);
         if (!m) continue;
         const key = m[1].trim();
         let val = m[2].trim();
-        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        if (
+          (val.startsWith('"') && val.endsWith('"')) ||
+          (val.startsWith("'") && val.endsWith("'"))
+        ) {
           val = val.slice(1, -1);
         }
         out[key] = val;
@@ -86,7 +190,10 @@ export default class GoogleSheetTablePlugin extends Plugin {
       if (!m) continue;
       const key = m[1].trim();
       let val = m[2].trim();
-      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      if (
+        (val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))
+      ) {
         val = val.slice(1, -1);
       }
       out[key] = val;
@@ -98,55 +205,65 @@ export default class GoogleSheetTablePlugin extends Plugin {
    * Convert various Google Sheets URLs to a CSV export URL.
    * Supports /export?format=csv, /gviz/tq, and /edit#gid=... forms.
    */
-  private buildCsvUrl(sheetUrl: string, range?: string, sheetName?: string, explicitGid?: string): string {
-  try {
-    const u = new URL(sheetUrl);
+  private buildCsvUrl(
+    sheetUrl: string,
+    range?: string,
+    sheetName?: string,
+    explicitGid?: string
+  ): string {
+    try {
+      const u = new URL(sheetUrl);
 
-    // Case A: already an export CSV URL
-    if (u.pathname.includes("/export") && u.searchParams.get("format") === "csv") {
-      if (range) u.searchParams.set("range", range);
-      return u.toString();
+      // Case A: already an export CSV URL
+      if (
+        u.pathname.includes("/export") &&
+        u.searchParams.get("format") === "csv"
+      ) {
+        if (range) u.searchParams.set("range", range);
+        return u.toString();
+      }
+
+      // Case B: gviz/tq → force CSV
+      if (u.pathname.includes("/gviz/tq")) {
+        u.searchParams.set("tqx", "out:csv");
+        if (range) u.searchParams.set("range", range);
+        if (sheetName && !u.searchParams.get("sheet"))
+          u.searchParams.set("sheet", sheetName);
+        return u.toString();
+      }
+
+      // Generic Google Sheets URL
+      const id = u.pathname.match(/\/spreadsheets\/d\/([^/]+)/)?.[1];
+
+      // gid can be in hash OR in query (?gid=)
+      const gidFromHash = u.hash.match(/[?&#]gid=(\d+)/)?.[1];
+      const gidFromQuery = u.searchParams.get("gid") ?? undefined;
+      const gid = explicitGid || gidFromHash || gidFromQuery;
+      console.log("Parsed sheet ID:", id, "gid:", gid);
+
+      if (id && gid) {
+        const base = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
+        return range ? `${base}&range=${encodeURIComponent(range)}` : base;
+      }
+
+      if (id) {
+        // Fallback: use gviz CSV with either sheet name or gid=0
+        const gviz = new URL(
+          `https://docs.google.com/spreadsheets/d/${id}/gviz/tq`
+        );
+        gviz.searchParams.set("tqx", "out:csv");
+        if (range) gviz.searchParams.set("range", range);
+        if (sheetName) gviz.searchParams.set("sheet", sheetName);
+        else gviz.searchParams.set("gid", "0");
+        return gviz.toString();
+      }
+
+      // Not a recognized Sheets URL → return as-is
+      return sheetUrl;
+    } catch {
+      return sheetUrl;
     }
-
-    // Case B: gviz/tq → force CSV
-    if (u.pathname.includes("/gviz/tq")) {
-      u.searchParams.set("tqx", "out:csv");
-      if (range) u.searchParams.set("range", range);
-      if (sheetName && !u.searchParams.get("sheet")) u.searchParams.set("sheet", sheetName);
-      return u.toString();
-    }
-
-    // Generic Google Sheets URL
-    const id = u.pathname.match(/\/spreadsheets\/d\/([^/]+)/)?.[1];
-
-    // gid can be in hash OR in query (?gid=)
-    const gidFromHash = u.hash.match(/[?&#]gid=(\d+)/)?.[1];
-    const gidFromQuery = u.searchParams.get("gid") ?? undefined;
-    const gid = explicitGid || gidFromHash || gidFromQuery;
-    console.log("Parsed sheet ID:", id, "gid:", gid);
-
-    if (id && gid) {
-      const base = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
-      return range ? `${base}&range=${encodeURIComponent(range)}` : base;
-    }
-
-    if (id) {
-      // Fallback: use gviz CSV with either sheet name or gid=0
-      const gviz = new URL(`https://docs.google.com/spreadsheets/d/${id}/gviz/tq`);
-      gviz.searchParams.set("tqx", "out:csv");
-      if (range) gviz.searchParams.set("range", range);
-      if (sheetName) gviz.searchParams.set("sheet", sheetName);
-      else gviz.searchParams.set("gid", "0");
-      return gviz.toString();
-    }
-
-    // Not a recognized Sheets URL → return as-is
-    return sheetUrl;
-  } catch {
-    return sheetUrl;
   }
-}
-
 
   private async fetchText(url: string): Promise<string> {
     const res = await fetch(url, { method: "GET" });
@@ -208,6 +325,27 @@ export default class GoogleSheetTablePlugin extends Plugin {
   background: var(--background-modifier-form-field);
   position: sticky; top: 0; z-index: 1;
 }
+  .gst-actions {
+  margin: 0.25rem 0 0.5rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.gst-actions a {
+  font-size: 0.9em;
+  text-decoration: underline;
+  opacity: 0.85;
+}
+.gst-actions a:hover { opacity: 1; }
+.gst-actions button {
+  font-size: 0.85em;
+  padding: 2px 8px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.gst-actions button:hover { filter: brightness(0.98); }
 `;
     document.head.appendChild(style);
   }
