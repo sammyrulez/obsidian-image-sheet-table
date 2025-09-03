@@ -2,6 +2,9 @@ import { Plugin } from "obsidian";
 // @ts-ignore - bundled by esbuild
 import Papa from "papaparse";
 
+
+
+
 /**
  * Google Sheet → Table (code block version)
  *
@@ -35,7 +38,9 @@ export default class GoogleSheetTablePlugin extends Plugin {
 
       try {
         const csvUrl = this.buildCsvUrl(cfg.sheet, cfg.range);
+        console.log("Fetching CSV from:", csvUrl);
         const csv = await this.fetchText(csvUrl);
+        console.log("Fetched CSV:", csv);
         const parsed = Papa.parse<string[]>(csv.trim(), { skipEmptyLines: true });
         if (parsed.errors?.length) throw new Error(parsed.errors.map((e: Papa.ParseError) => e.message).join("; "));
 
@@ -93,38 +98,55 @@ export default class GoogleSheetTablePlugin extends Plugin {
    * Convert various Google Sheets URLs to a CSV export URL.
    * Supports /export?format=csv, /gviz/tq, and /edit#gid=... forms.
    */
-  private buildCsvUrl(sheetUrl: string, range?: string): string {
-    try {
-      const u = new URL(sheetUrl);
+  private buildCsvUrl(sheetUrl: string, range?: string, sheetName?: string, explicitGid?: string): string {
+  try {
+    const u = new URL(sheetUrl);
 
-      // Already an export CSV URL
-      if (u.pathname.includes("/export") && u.searchParams.get("format") === "csv") {
-        if (range) u.searchParams.set("range", range);
-        return u.toString();
-      }
-
-      // gviz → out:csv
-      if (u.pathname.includes("/gviz/tq")) {
-        u.searchParams.set("tqx", "out:csv");
-        if (range) u.searchParams.set("range", range);
-        return u.toString();
-      }
-
-      // edit#gid=... → export CSV
-      const m = u.pathname.match(/\/spreadsheets\/d\/([^/]+)/);
-      const id = m?.[1];
-      const gid = u.hash.match(/gid=(\d+)/)?.[1];
-      if (id && gid) {
-        const base = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
-        return range ? `${base}&range=${encodeURIComponent(range)}` : base;
-      }
-
-      // Fallback: return original (could be a direct CSV)
-      return sheetUrl;
-    } catch {
-      return sheetUrl;
+    // Case A: already an export CSV URL
+    if (u.pathname.includes("/export") && u.searchParams.get("format") === "csv") {
+      if (range) u.searchParams.set("range", range);
+      return u.toString();
     }
+
+    // Case B: gviz/tq → force CSV
+    if (u.pathname.includes("/gviz/tq")) {
+      u.searchParams.set("tqx", "out:csv");
+      if (range) u.searchParams.set("range", range);
+      if (sheetName && !u.searchParams.get("sheet")) u.searchParams.set("sheet", sheetName);
+      return u.toString();
+    }
+
+    // Generic Google Sheets URL
+    const id = u.pathname.match(/\/spreadsheets\/d\/([^/]+)/)?.[1];
+
+    // gid can be in hash OR in query (?gid=)
+    const gidFromHash = u.hash.match(/[?&#]gid=(\d+)/)?.[1];
+    const gidFromQuery = u.searchParams.get("gid") ?? undefined;
+    const gid = explicitGid || gidFromHash || gidFromQuery;
+    console.log("Parsed sheet ID:", id, "gid:", gid);
+
+    if (id && gid) {
+      const base = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
+      return range ? `${base}&range=${encodeURIComponent(range)}` : base;
+    }
+
+    if (id) {
+      // Fallback: use gviz CSV with either sheet name or gid=0
+      const gviz = new URL(`https://docs.google.com/spreadsheets/d/${id}/gviz/tq`);
+      gviz.searchParams.set("tqx", "out:csv");
+      if (range) gviz.searchParams.set("range", range);
+      if (sheetName) gviz.searchParams.set("sheet", sheetName);
+      else gviz.searchParams.set("gid", "0");
+      return gviz.toString();
+    }
+
+    // Not a recognized Sheets URL → return as-is
+    return sheetUrl;
+  } catch {
+    return sheetUrl;
   }
+}
+
 
   private async fetchText(url: string): Promise<string> {
     const res = await fetch(url, { method: "GET" });
