@@ -1,7 +1,7 @@
 {
   "id": "image-sheet-table",
   "name": "Image → Google Sheet Table",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAppVersion": "1.9.0",
   "description": "Renders a table from a Google Sheet via a fenced code block.",
   "author": "Sam Reghenzi",
