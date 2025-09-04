@@ -19,7 +19,7 @@ The plugin supports **public CSV** links out-of-the-box, and **private sheets** 
 * 🔗 “**Open in Google Sheets**” link above each table
 * 🧭 Flexible URL handling: `export?format=csv`, `gviz/tq?tqx=out:csv`, or standard `/edit#gid=…`
 * 🧩 Optional parameters: `range`, `headers`, `maxRows`, `gid`, `sheetName`
-* 🔐 **Private sheets** support (OAuth Device Flow) with Sheets/Drive API
+* 🔐 **Private sheets** support (OAuth Device Flow) with Sheets API
 * 🛡️ Idempotent rendering (no lingering “Loading…” on re-render)
 
 ---
@@ -32,16 +32,18 @@ The plugin supports **public CSV** links out-of-the-box, and **private sheets** 
 
 ---
 
+Here’s an updated **Installation** section you can drop into your README (English, Markdown). It adds the option to **install from a GitHub Release ZIP**.
+
+````md
 ## Installation
 
-### Option A — Quick local install
-
+### Option A — Quick local install (build from source)
 1. Build the plugin:
-
    ```bash
    npm install
    npm run build
-   ```
+````
+
 2. Copy the build outputs into your vault:
 
    ```
@@ -54,9 +56,11 @@ The plugin supports **public CSV** links out-of-the-box, and **private sheets** 
    * Settings → **Community plugins** → disable **Restricted mode** (if enabled)
    * **Installed plugins** → enable **Google Sheet → Table**
 
+---
+
 ### Option B — Dev workflow (symlink + watch)
 
-1. Create a symlink from your project folder into the vault plugins folder.
+1. Create a symlink from your project folder into the vault:
 
    * macOS/Linux:
 
@@ -78,6 +82,35 @@ The plugin supports **public CSV** links out-of-the-box, and **private sheets** 
 3. In Obsidian: Command Palette → **Reload app** (or toggle the plugin off/on).
 
 ---
+
+### Option C — Install from GitHub Release (ZIP)
+
+1. Go to your repository’s **Releases** page and download the asset named:
+
+   ```
+   google-sheet-table-<version>.zip
+   ```
+
+   (This ZIP is produced by your GitHub Action on each push to `main`.)
+2. Unzip it into your vault at:
+
+   ```
+   <YOUR_VAULT>/.obsidian/plugins/google-sheet-table/
+   ```
+
+   Make sure the **folder name matches the plugin id** in `manifest.json` (`google-sheet-table`).
+3. In Obsidian:
+
+   * Settings → **Community plugins** → disable **Restricted mode** (if enabled)
+   * **Installed plugins** → enable **Google Sheet → Table**
+4. To update later: download the newest ZIP, replace the files in the same folder, then Command Palette → **Reload app**.
+
+> Tip: If the plugin doesn’t appear, double-check the path and that `manifest.json` is present in the plugin folder’s root.
+
+```
+::contentReference[oaicite:0]{index=0}
+```
+ ---
 
 ## Usage
 
@@ -132,7 +165,7 @@ You can render **private** (non-public) sheets without a server by authorizing t
 1. Go to **Google Cloud Console** → **APIs & Services** → **Credentials**.
 2. Create **OAuth client ID** → **Desktop app**. Copy the **Client ID**.
 3. In **OAuth consent screen**, add your account as a **Test user**.
-4. Ensure APIs are enabled (Sheets API, Drive API).
+4. Ensure APIs are enabled (Sheets API).
 
 ### 2) Plugin Settings
 
@@ -264,8 +297,12 @@ Minimal styles are injected at runtime. You can override them via a theme snippe
   Scopes used:
 
   * `spreadsheets.readonly`
-  * `drive.readonly` (to resolve sheet metadata like tab title from `gid`)
+* **Enable Sheets API** in the *correct* project  
+   Open: `https://console.cloud.google.com/apis/api/sheets.googleapis.com/overview?project=<PROJECT_NUMBER>`  
+   Replace `<PROJECT_NUMBER>` with your project number. Click **Enable**.
+
 * Revoke access anytime from your Google Account → **Security** → **Third-party access**.
+
 
 ---
 

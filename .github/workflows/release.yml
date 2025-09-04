@@ -1,0 +1,92 @@
+name: Release on push to main
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # we need history to push tags/commits
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build (pre-bump sanity)
+        run: npm run build
+
+      - name: Bump patch version in package.json (no tag)
+        run: npm version patch --no-git-tag-version
+
+      - name: Sync version to manifest.json
+        run: |
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "New version: $NEW_VERSION"
+          jq --arg v "$NEW_VERSION" '.version = $v' manifest.json > manifest.tmp && mv manifest.tmp manifest.json
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json manifest.json
+          git commit -m "chore(release): v$NEW_VERSION [skip ci]"
+          git push
+
+      - name: Create tag vX.Y.Z
+        run: |
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
+          git push origin "v$NEW_VERSION"
+
+      - name: Build (post-bump)
+        run: npm run build
+
+      - name: Package plugin zip
+        id: pack
+        shell: bash
+        run: |
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          PLUGIN_ID=image-sheet-table
+          ZIP_NAME="${PLUGIN_ID}-${NEW_VERSION}.zip"
+
+          # Collect files (only if they exist)
+          FILES=("manifest.json" "main.js" "styles.css" "README.md" "LICENSE")
+          TOZIP=()
+          for f in "${FILES[@]}"; do
+            [ -f "$f" ] && TOZIP+=("$f")
+          done
+
+          if [ ${#TOZIP[@]} -eq 0 ]; then
+            echo "No files found to zip. Failing."
+            exit 1
+          fi
+
+          zip -r "$ZIP_NAME" "${TOZIP[@]}"
+          echo "zip_name=$ZIP_NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.pack.outputs.version }}
+          name: v${{ steps.pack.outputs.version }}
+          files: ${{ steps.pack.outputs.zip_name }}
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
