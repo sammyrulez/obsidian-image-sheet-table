@@ -34,7 +34,7 @@ The plugin supports **public CSV** links out-of-the-box, and **private sheets** 
 
 Here’s an updated **Installation** section you can drop into your README (English, Markdown). It adds the option to **install from a GitHub Release ZIP**.
 
-````md
+
 ## Installation
 
 ### Option A — Quick local install (build from source)
@@ -42,7 +42,7 @@ Here’s an updated **Installation** section you can drop into your README (Engl
    ```bash
    npm install
    npm run build
-````
+   ```
 
 2. Copy the build outputs into your vault:
 

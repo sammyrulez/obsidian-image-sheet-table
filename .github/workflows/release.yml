@@ -62,7 +62,7 @@ jobs:
         shell: bash
         run: |
           NEW_VERSION=$(node -p "require('./package.json').version")
-          PLUGIN_ID=image-sheet-table
+          PLUGIN_ID=igoogle-sheet-table
           ZIP_NAME="${PLUGIN_ID}-${NEW_VERSION}.zip"
 
           # Collect files (only if they exist)
