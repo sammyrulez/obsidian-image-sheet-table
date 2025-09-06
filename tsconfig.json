@@ -4,8 +4,8 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "lib": ["ES2020", "DOM"],
-    "types": ["node", "obsidian"],
+    "types": ["node", "obsidian", "jest"],
     "strict": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
 }

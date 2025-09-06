@@ -34,6 +34,9 @@ jobs:
       - name: Build (pre-bump sanity)
         run: npm run build
 
+      - name: Run tests
+        run: npm test || npx jest
+
       - name: Bump patch version in package.json (no tag)
         run: npm version patch --no-git-tag-version
 
