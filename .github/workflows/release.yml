@@ -84,12 +84,27 @@ jobs:
           echo "zip_name=$ZIP_NAME" >> "$GITHUB_OUTPUT"
           echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Generate release notes from commit messages
+        id: notes
+        run: |
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            git log "$PREV_TAG"..HEAD --pretty=format:'* %s' > release-notes.txt
+          else
+            git log --pretty=format:'* %s' > release-notes.txt
+          fi
+          echo "release_notes<<EOF" >> "$GITHUB_OUTPUT"
+          cat release-notes.txt >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.pack.outputs.version }}
           name: v${{ steps.pack.outputs.version }}
           files: ${{ steps.pack.outputs.zip_name }}
+          body: ${{ steps.notes.outputs.release_notes }}
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
