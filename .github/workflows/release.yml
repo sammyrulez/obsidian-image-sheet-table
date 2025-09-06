@@ -94,9 +94,7 @@ jobs:
           else
             git log --pretty=format:'* %s' > release-notes.txt
           fi
-          echo "release_notes<<EOF" >> "$GITHUB_OUTPUT"
-          cat release-notes.txt >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "body=$(cat release-notes.txt | sed ':a;N;$!ba;s/\n/\\n/g')" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -104,7 +102,7 @@ jobs:
           tag_name: v${{ steps.pack.outputs.version }}
           name: v${{ steps.pack.outputs.version }}
           files: ${{ steps.pack.outputs.zip_name }}
-          body: ${{ steps.notes.outputs.release_notes }}
+          body: ${{ steps.notes.outputs.body }}
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
