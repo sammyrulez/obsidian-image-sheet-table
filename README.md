@@ -321,11 +321,6 @@ Minimal styles are injected at runtime. You can override them via a theme snippe
 
 MIT — see `LICENSE`.
 
----
 
-## Changelog (highlights)
-
-* **0.2.0** — Code block `gsheet`, actions toolbar, robust URL handling, OAuth Device Flow support, idempotent rendering.
-* **0.1.x** — Initial image-title prototype (deprecated in favor of code block).
 
 
