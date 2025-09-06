@@ -1,7 +1,7 @@
 {
   "id": "google-sheet-table",
   "name": "Google Sheet → Table",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "minAppVersion": "1.9.0",
   "description": "Renders a table from a Google Sheet via a fenced code block.",
   "author": "Sam Reghenzi",
