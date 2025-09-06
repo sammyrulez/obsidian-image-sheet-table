@@ -5,7 +5,7 @@ import {
 import { DEFAULT_SETTINGS, PluginSettings } from "./settings";
 import { GSheetSettingTab } from "./components/settingsTab";
 import { GoogleAuth } from "./components/auth";
-import { buildUrls, fetchCsvRows } from "./components/sheetApi";
+import { buildUrls, fetchCsvRows, fetchRowsViaSheetsAPI } from "./components/sheetApi";
 import { buildTable, injectStyles } from "./components/tableRenderer";
 import { parseConfig } from "./components/utils";
 
@@ -55,7 +55,16 @@ export default class GoogleSheetTablePlugin extends Plugin {
           openLink.rel = "noopener";
           let rows: string[][];
           if (this.settings.auth.authMethod === "oauth-desktop") {
-            rows = await fetchCsvRows(csvUrl, await this.auth.ensureAccessToken());
+            const sheetUrl: string = cfg.sheet;
+            const spreadsheetId = sheetUrl.match(/\/spreadsheets\/d\/([^/]+)/)?.[1];
+            if (!spreadsheetId) throw new Error("Invalid Google Sheet URL (missing spreadsheetId).");
+            rows = await fetchRowsViaSheetsAPI(
+              spreadsheetId,
+              cfg.range,
+              cfg.gid,
+              cfg.sheetName,
+              await this.auth.ensureAccessToken()
+            );
           } else {
             rows = await fetchCsvRows(csvUrl);
           }

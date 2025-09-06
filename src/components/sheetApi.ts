@@ -80,3 +80,52 @@ export async function fetchText(url: string): Promise<string> {
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return await res.text();
 }
+
+export async function fetchRowsViaSheetsAPI(
+  spreadsheetId: string,
+  range?: string,
+  gid?: string,
+  sheetName?: string,
+  token?: string
+): Promise<string[][]> {
+  if (!token) throw new Error("Missing access token for protected sheet");
+  // Resolve sheet title if needed
+  const title = await resolveSheetTitle(spreadsheetId, token, gid, sheetName);
+  const a1 = buildA1(title, range);
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(a1)}?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const msg = data?.error?.message || `${res.status} ${res.statusText}`;
+    throw new Error(msg);
+  }
+  return (data.values || []) as string[][];
+}
+
+export async function resolveSheetTitle(
+  spreadsheetId: string,
+  token: string,
+  gid?: string,
+  sheetName?: string
+): Promise<string> {
+  if (sheetName && sheetName.trim()) return sheetName.trim();
+  const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets(properties(sheetId,title))`;
+  const res = await fetch(metaUrl, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const meta = await res.json();
+  const sheets: any[] = meta.sheets || [];
+  if (gid) {
+    const hit = sheets.find((s) => String(s?.properties?.sheetId) === String(gid));
+    if (hit?.properties?.title) return hit.properties.title as string;
+  }
+  return sheets[0]?.properties?.title || "Sheet1";
+}
+
+export function buildA1(title: string, range?: string): string {
+  const needsQuotes = /[\s:!]/.test(title);
+  const base = needsQuotes ? `'${title}'` : title;
+  return range ? `${base}!${range}` : base;
+}
