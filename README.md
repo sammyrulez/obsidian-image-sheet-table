@@ -22,6 +22,8 @@ The plugin supports **public CSV** links out-of-the-box, and **private sheets** 
 * 🔐 **Private sheets** support (OAuth Device Flow) with Sheets API
 * 🛡️ Idempotent rendering (no lingering “Loading…” on re-render)
 
+![Screenshot](screenshot.png)
+
 ---
 
 ## Requirements
@@ -325,3 +327,5 @@ MIT — see `LICENSE`.
 
 * **0.2.0** — Code block `gsheet`, actions toolbar, robust URL handling, OAuth Device Flow support, idempotent rendering.
 * **0.1.x** — Initial image-title prototype (deprecated in favor of code block).
+
+
